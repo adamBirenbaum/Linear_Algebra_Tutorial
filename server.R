@@ -93,19 +93,46 @@ server <- function(input, output) {
     
   }
   
-  split_into_frames_df.animate_vector <- function(v,A,n_frames = 10){
-    transformed_v <- A %*% v
-    el1 <- seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames)
-    el2 <- seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames)
-    
-    init <- replicate(n_frames,0)
-    df <- data.frame(x = 0, xend = init, y = 0, yend = init,frames = 0)
-    
-    for (i in 1:n_frames){
-      new_A <- matrix(c(el1[i],el2[i]),nrow = 2)
-      df[i,] <- data.frame(x = 0, xend = new_A[1,1], y = 0, yend = new_A[2,1],frames = i)
+  split_into_frames_df.animate_vector <- function(v,A = NULL,n_frames = 10,add = F, v2 = NULL, frame_order = 1){
+    if (!add){
+      
+      transformed_v <- A %*% v
+      el1 <- seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames)
+      el2 <- seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames)
+      
+      init <- replicate(n_frames,0)
+      df <- data.frame(x = 0, xend = init, y = 0, yend = init,frames = 0)
+      
+      for (i in 1:n_frames){
+        new_A <- matrix(c(el1[i],el2[i]),nrow = 2)
+        df[i,] <- data.frame(x = 0, xend = new_A[1,1], y = 0, yend = new_A[2,1],frames = i)
+      }
+      
+    }else{
+      browser()
+      transformed_v <- v + v2
+      df <- data.frame(
+        x = seq(from = 0, to = v2[1,1], length.out = n_frames),
+        y = seq(from = 0, to = v2[2,1], length.out = n_frames),
+        xend = seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames),
+        yend = seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames),
+        frames = 1:n_frames
+      )
+      # el1 <- seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames)
+      # el2 <- seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames)
+      # 
+      # init <- replicate(n_frames,0)
+      # df <- data.frame(x = v[1,1], xend = init, y = v[2,1], yend = init,frames = 0)
+      # 
+      # for (i in 1:n_frames){
+      #   new_A <- matrix(c(el1[i],el2[i]),nrow = 2)
+      #   df[i,] <- data.frame(x = v[1,1], xend = new_A[1,1], y = v[2,1], yend = new_A[2,1],frames = i)
+      # }
     }
+    df$frames <- df$frames + (frame_order - 1)*n_frames
+
     df
+    
     
   }
   
@@ -123,13 +150,20 @@ server <- function(input, output) {
       A_i <- make_A(c(vx,0,0,vx))
       A_j <- make_A(c(vy,0,0,vy))
     
-      i_df <- split_into_frames_df(v_i,A_i)
-      j_df <- split_into_frames_df(v_j,A_j)
+      i_df <- split_into_frames_df(v_i,A = A_i)
+      j_df <- split_into_frames_df(v_j,A = A_j, frame_order = 2)
+ 
+      new_vi <- v_i *vx
+      add_vi_df <- split_into_frames_df(v_i * vx, v2 =v_j * vy , add = T,frame_order = 3)
         
       i_df$text <- "i"
       j_df$text <- "j"
+      add_vi_df$text <- "new i"
       g <- ggplot(data = i_df, aes(x = x, y = y, xend = xend, yend = yend, frame = frames,label = text)) +geom_segment()+ geom_text() +
-        geom_segment(data = j_df, aes(x = x, y = y, xend = xend, yend = yend,frame = frames)) + ggplot_coord_axes_theme()
+        geom_segment(data = j_df, aes(x = x, y = y, xend = xend, yend = yend,frame = frames)) + 
+         
+        geom_segment(data = add_vi_df, aes(x = x, y = y, xend = xend, yend = yend,frame = frames))   +
+        ggplot_coord_axes_theme()
       
       ggplotly(g)
     })
