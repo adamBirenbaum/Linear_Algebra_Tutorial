@@ -93,13 +93,25 @@ server <- function(input, output) {
     
   }
   
-  split_into_frames_df.animate_vector <- function(v,A = NULL,n_frames = 10,add = F, v2 = NULL, frame_order = 1){
+  split_into_frames_df.animate_vector <- function(v,A = NULL,n_frames = 10,add = F, v2 = NULL, static = F){
+    if (static){
+      return(data.frame(x = rep(x = 0, n_frames), xend = v[1,1],y = 0, yend = v[2,1], frames  = 1))
+    }
+    
     if (!add){
       
-      transformed_v <- A %*% v
-      el1 <- seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames)
-      el2 <- seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames)
+      if (is.null(A)){
+        el1 <- seq(from =0, to = v[1,1], length.out = n_frames)
+        el2 <- seq(from = 0, to = v[2,1], length.out = n_frames)
+        
+      }else{
+        transformed_v <- A %*% v
+        el1 <- seq(from = v[1,1], to = transformed_v[1,1], length.out = n_frames)
+        el2 <- seq(from = v[2,1], to = transformed_v[2,1], length.out = n_frames)
+        
+      }
       
+
       init <- replicate(n_frames,0)
       df <- data.frame(x = 0, xend = init, y = 0, yend = init,frames = 0)
       
@@ -109,7 +121,6 @@ server <- function(input, output) {
       }
       
     }else{
-      browser()
       transformed_v <- v + v2
       df <- data.frame(
         x = seq(from = 0, to = v2[1,1], length.out = n_frames),
@@ -129,13 +140,41 @@ server <- function(input, output) {
       #   df[i,] <- data.frame(x = v[1,1], xend = new_A[1,1], y = v[2,1], yend = new_A[2,1],frames = i)
       # }
     }
-    df$frames <- df$frames + (frame_order - 1)*n_frames
 
     df
     
     
   }
+
   
+  combine_frames_by_section <- function(frames_df,sections,text = "",n_frames = 10){
+
+    
+    if (length(frames_df) != length(sections)) stop("Number of sections must equal the number of frame data frames passed")
+     number_of_sections <- length(unlist(sections))
+
+    df <- data.frame(x = integer(0),xend = integer(0), y = integer(0), yend = integer(0), frames = integer(0),text = integer(0))
+    
+    for (i in 1:length(sections)){
+        current_section <- sections[[i]]
+        for (j in 1:length(current_section)){
+          current_df <- frames_df[[i]]
+          current_df$frames <- ((current_section[j] - 1)*n_frames + 1):((current_section[j] - 1)*n_frames + 10)
+          
+          if (!is.null(text)) current_df$text <- text[i]
+          
+          df <- rbind(df, current_df)
+          
+        }
+      
+    }
+    
+    
+    # df <- do.call(rbind,list(...))
+    # df$text <- rep(text,each = nrow(df) / length(text))
+    df
+  }
+
   
   observeEvent(input$vector_basic_plot_button,{
     output$vector_basic_plot <- renderPlotly({
@@ -144,25 +183,30 @@ server <- function(input, output) {
       vx <- as.numeric(input$vector_basic_v1)
       vy <- as.numeric(input$vector_basic_v2)
       
-      v_i <- make_v(c(1,0))    
-      v_j <- make_v(c(0,1))
+      
+      vec_i <- make_v(c(1,0))    
+      vec_j <- make_v(c(0,1))
+      vec_new <- make_v(c(vx,vy))
       
       A_i <- make_A(c(vx,0,0,vx))
       A_j <- make_A(c(vy,0,0,vy))
     
-      i_df <- split_into_frames_df(v_i,A = A_i)
-      j_df <- split_into_frames_df(v_j,A = A_j, frame_order = 2)
+      transformed_i_frames <- split_into_frames_df(vec_i,A = A_i)
+      transformed_j_frames <- split_into_frames_df(vec_j,A = A_j)
  
-      new_vi <- v_i *vx
-      add_vi_df <- split_into_frames_df(v_i * vx, v2 =v_j * vy , add = T,frame_order = 3)
-        
-      i_df$text <- "i"
-      j_df$text <- "j"
-      add_vi_df$text <- "new i"
-      g <- ggplot(data = i_df, aes(x = x, y = y, xend = xend, yend = yend, frame = frames,label = text)) +geom_segment()+ geom_text() +
-        geom_segment(data = j_df, aes(x = x, y = y, xend = xend, yend = yend,frame = frames)) + 
-         
-        geom_segment(data = add_vi_df, aes(x = x, y = y, xend = xend, yend = yend,frame = frames))   +
+      static_transformed_j <- split_into_frames_df(vec_j * vy, static = T)
+      
+      add_vi_df <- split_into_frames_df(vec_i * vx, v2 = vec_j * vy , add = T)
+      
+      transformed_new_frames <- split_into_frames_df(vec_new)  
+
+      frame_df <- combine_frames_by_section(list(transformed_i_frames,
+                                                 transformed_j_frames,
+                                                 static_transformed_j,add_vi_df,transformed_new_frames),
+                                            list(1,1,2:3,2:3,3),text = c("i","j","j","add","transformed"))
+
+
+      g <- ggplot(data = frame_df, aes(x = x, y = y, xend = xend, yend = yend, frame = frames,label = text)) +geom_segment()+ geom_text() +
         ggplot_coord_axes_theme()
       
       ggplotly(g)
